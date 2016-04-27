@@ -59,18 +59,20 @@ def get_state (key, defaultval = None):
         state = {}
     return state.get (key, defaultval)
 
-def editor (project):
+def editor (project, assignee):
+    assignee = assignee if assignee is not None else "Unassigned"
     try:
         file (TEMP_FILE)
     except IOError:
         file (TEMP_FILE, "w").write ("""
 
 # This issue will be created in selected project: %s
+# Assignee: %s
 # To change, quit the editor now and use 'climine select' to choose a different project.
 # Please explain the issue. The first line will become the title. Trailing
 # lines starting with '#' (like these) will be ignored, and empty messages will
 # not be submitted. 
-""" % (project))
+""" % (project, assignee))
     os.system ("vi %s" % (TEMP_FILE))
 
     title = ""
@@ -304,23 +306,30 @@ def listing (config, user, limit = None):
         pretty_table (("Id", "Tracker", "Status", "Subject", "Assigned", "Priority"), printable)
     print "(%d rows in total)" % (rows)
 
-def create_issue (config, trackerid):
+def create_issue (config, trackerid, assignee):
     sel_project_id = get_state ("SELECTED_PROJECT", None)
     sel_project_name = get_state ("SELECTED_PROJECT_NAME", None)
+
     if sel_project_id is None:
         print "No project selected, User 'climine select' to select a project first!"
         sys.exit (1)
 
-    title, body = editor (sel_project_name)
+    title, body = editor (sel_project_name, assignee)
     issue = {
-        "issue": {
-            "project_id": sel_project_id,
-            "tracker_id": int (trackerid),
-            "subject": title,
-            "description": body,
-        }
+        "project_id": sel_project_id,
+        "tracker_id": int (trackerid),
+        "subject": title,
+        "description": body,
     }
-    resp = post_helper (config, "/issues.json", issue)
+
+    if assignee is not None:
+        localusers = get_local_users (config)
+        if not localusers.has_key (assignee):
+            print "No such user!"
+            sys.exit (1)
+        issue["assigned_to_id"] = localusers.get (assignee)
+
+    resp = post_helper (config, "/issues.json", {"issue": issue})
     if not resp.has_key ("issue"):
         print "Error in creating issue! Please check the log!"
         sys.exit (1)
@@ -374,7 +383,7 @@ if args.command == "open" or args.command == "new":
     if not trackers.has_key (args.subcommand):
         print "Specify tracker.. bug/feature..."
         sys.exit (1)
-    create_issue (CONFIG, trackers.get (args.subcommand))
+    create_issue (CONFIG, trackers.get (args.subcommand), args.user)
 elif args.command == "select":
     select_project (CONFIG)
 elif args.command == "init":
