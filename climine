@@ -131,7 +131,10 @@ def select_project (config):
     name = projs.get (int (new_proj))
     set_state ("SELECTED_PROJECT_NAME", name)
     print "Selected:", name
-    os.unlink (TEMP_FILE)
+    try:
+        os.unlink (TEMP_FILE)
+    except OSError:
+        pass
 
 def users (config, saveonly = False):
     users = get_helper (config, "/users.json")
